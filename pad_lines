@@ -1,0 +1,14 @@
+#!/bin/bash
+
+if [[ $1 = "-h" || $1 = "--help" ]]
+then
+    echo "Pad each line of the stdin to the same width with spaces"
+    echo "Set COLUMNS environment variable or pad according to the width of the terminal"
+    exit 0
+fi
+
+while read line
+do
+    echo -n "$line"
+    bar ${#line} <<<0
+done

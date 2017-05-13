@@ -1,0 +1,64 @@
+#!/bin/bash
+read -r -a memory <<<`free -b | head -n2 | collapse n | cut -d" " -f2,3,4,5,6,7,8,9 | rs -c' ' -C' ' -T`
+
+for i in `seq 0 $((${#memory[*]}-1))`
+do
+    if [ `grep "total"<<<${memory[$i]}` ]
+    then
+        mem_total=${memory[$((i+1))]}
+    fi
+    if [ `grep "free"<<<${memory[$i]}` ]
+    then
+        mem_free=${memory[$((i+1))]}
+    fi
+    if [ `grep "cache"<<<${memory[$i]}` ]
+    then
+        mem_cache=${memory[$((i+1))]}
+    fi
+done
+
+mem_active=$((mem_total-mem_free-mem_cache))
+
+if [ -z $COLUMNS ]
+then
+   COLUMNS=`tput cols`
+else
+   endsymbol="|"
+fi
+
+read -r -a swap_str <<<`free -b | grep "^Swap:" | collapse | cut -f2,3 -d" "`
+
+printf "Mem: %-7s + %-7s " `hr --gibi <<<"$mem_active"` `hr --gibi <<<"$mem_cache"`
+
+if [ ! -z "$1" ]
+then
+    width=$((COLUMNS-23))
+    percent=`bc <<<"$width*($mem_active)/$mem_total"`
+    percent_2=`bc <<<"$width*($mem_cache)/$mem_total"`
+    rest=$((width-percent-percent_2))    
+    for i in `seq $percent`
+    do
+     echo -n "-"
+    done 
+    for i in `seq $percent_2`
+    do
+     echo -n "_"
+    done 
+    for i in `seq $rest`
+    do
+     echo -n " "
+    done     
+    echo $endsymbol
+else
+    printf "/ %-7s\n" `hr --gibi <<<"$mem_total"`
+fi
+
+printf "Swp: %-7s           " `hr --gibi <<<"${swap_str[1]}"`
+if [ ! -z "$1" ]
+then
+    percent_swp=`bc <<<"100*${swap_str[1]}/${swap_str[0]}"`
+    bar 23 <<<"$percent_swp"
+else
+    printf "/ %-7s\n" `hr --gibi <<<"${swap_str[0]}"`
+fi
+    

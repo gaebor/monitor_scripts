@@ -1,0 +1,7 @@
+#!/bin/bash
+
+monitor_cpu $1
+monitor_mem $1
+empty_line
+monitor_disk $1
+empty_line

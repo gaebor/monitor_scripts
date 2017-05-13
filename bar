@@ -1,0 +1,36 @@
+#!/bin/bash
+space=0
+if [ ! -z "$1" ]
+then
+    space=$1
+fi
+
+endsymbol="|"
+
+if [ -z $COLUMNS ]
+then
+   COLUMNS=`tput cols`
+   endsymbol=""
+fi
+
+width=$((COLUMNS-space))
+
+if [ -z $BAR ]
+then
+   BAR="-"
+fi
+
+read percent
+percent=`echo 100 $percent | min`
+percent=`echo 0 $percent | max`
+
+bars=`bc <<<"$percent*$width/(100.0)"`
+for i in `seq $bars`
+do
+    echo -n "$BAR"
+done
+for i in `seq $((width-bars))`
+do
+    echo -n " "
+done
+echo $endsymbol

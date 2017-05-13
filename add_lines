@@ -1,0 +1,8 @@
+#!/bin/bash
+cat
+if [[ $# -eq 0 ]]
+then
+    echo 
+else
+    $1
+fi

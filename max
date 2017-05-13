@@ -1,0 +1,2 @@
+#!/bin/bash
+python2 -c "import sys; from itertools import chain; print '%g' % max(chain(*[list(map(float, x.strip().split())) for x in sys.stdin]))"

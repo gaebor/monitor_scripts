@@ -1,0 +1,7 @@
+#!/bin/bash
+if [ $# -eq 0 ]
+then
+ sed "s/^\s\+//"
+else
+ cat
+fi | sed "s/\s\+/ /g"

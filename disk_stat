@@ -1,0 +1,38 @@
+#!/bin/bash
+
+tmp_dir="/home/.tmpfs/$USER"
+mkdir -p $tmp_dir
+touch $tmp_dir/.disk_time
+touch $tmp_dir/.disk_stat
+
+NEW_STAT=`iostat -dk | tail -n+4 | collapse | cut -f1,5,6 -d" "`
+NEW_TIME=`date +%s`
+
+DISK_TIME=`cat $tmp_dir/.disk_time 2> /dev/null`
+
+cat $tmp_dir/.disk_stat | add_lines "echo $NEW_STAT" | python2 -c "
+import sys
+from collections import defaultdict
+
+def read_stat():
+    line = sys.stdin.readline().strip().split()
+    return {line[i]: (int(line[i+1]), int(line[i+2])) for i in range(0, len(line), 3)}
+
+prev = read_stat()
+next = read_stat()
+
+diff = max(int($NEW_TIME)-int($DISK_TIME), 1)
+
+for device in sorted(next):
+    sys.stdout.write(device)
+    if device in prev:
+	for i in range(len(next[device])):
+	    sys.stdout.write(\" \" + str(int(1024.0*float(next[device][i]-prev[device][i]) / diff)))
+    else:
+	for i in range(len(next[device])):
+	    sys.stdout.write(\" \" + str(int(1024.0*float(next[device][i]) / diff)))
+    print
+"
+
+echo $NEW_STAT > $tmp_dir/.disk_stat
+echo $NEW_TIME > $tmp_dir/.disk_time

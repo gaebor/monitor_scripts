@@ -1,0 +1,18 @@
+#!/bin/bash
+
+if [[ $1 = "-h" || $1 = "--help" ]]
+then
+    echo "Determines which filesystem is the device in"
+    exit 0
+fi
+
+lsblk -o NAME,LABEL -l | tail -n+2 | add_lines | \
+while read -r -a line
+do
+    if [[ -z $device || -z `grep "^$device" <<<${line[0]}` ]]
+    then
+        echo "$device $name"
+        device=${line[0]}
+    fi
+    name=${line[1]}
+done | tail -n+2
