@@ -56,7 +56,7 @@ function find_name()
 }
 
 max_size=6
-for d in ${devices[*]}
+for d in `device_fs | cut -f1 -d" "`
 do
     if [ $max_size -lt ${#d} ]
     then
