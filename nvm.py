@@ -19,8 +19,13 @@ def main(args):
     busiest = ['-', '-']
     if len(processes) > 0:
         busiest_pid = processes[0].pid
-        pid_str = check_output(["ps", "--pid=%d" % busiest_pid, "-o", "fname,uname"])
-        busiest = pid_str.split('\n')[1].strip().split()
+        pid_str = ""
+        try:
+            pid_str = check_output(["ps", "--pid=%d" % busiest_pid, "-o", "fname,uname"]).split('\n')
+        except:
+            busiest = ['?', '?']
+        if len(pid_str) > 1:
+            busiest = pid_str.split('\n')[1].strip().split()
         
     busiest_str = "(" + busiest[0] + " " + busiest[1] + ")"
     print('%' +  '%-5d' % gpu_info.gpu, mem_info.used, '/', mem_info.total,
