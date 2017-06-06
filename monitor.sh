@@ -1,5 +1,14 @@
 #!/bin/bash
 
+if [[ " ${*} " == *" -h "* ]]; then
+    echo script for monitoring the cpu and memory usage
+    echo flags:
+    echo -e "\t-h\thelp"
+    echo -e "\t-b\tshow busiest worker"
+    echo -e "\t-c\tshow # of cores"
+    exit 0
+fi
+
 mem_total=`free -mb | tail -n+2 | head -n1 | collapse | cut -f2 -d" "`
 
 num_cores=`grep -c ^processor /proc/cpuinfo`
@@ -7,7 +16,7 @@ num_cores=`grep -c ^processor /proc/cpuinfo`
 high_usage=False
 show_cores=False
 
-if [[ " ${*} " == *" -h "* ]]; then
+if [[ " ${*} " == *" -b "* ]]; then
     high_usage=True
 fi
 
