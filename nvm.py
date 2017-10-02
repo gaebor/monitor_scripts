@@ -25,7 +25,7 @@ def main(args):
         except:
             busiest = ['?', '?']
         if len(pid_str) > 1:
-            busiest = pid_str.split('\n')[1].strip().split()
+            busiest = pid_str[1].strip().split()
         
     busiest_str = "(" + busiest[0] + " " + busiest[1] + ")"
     print('%' +  '%-5d' % gpu_info.gpu, mem_info.used, '/', mem_info.total,
@@ -46,5 +46,8 @@ parser.add_argument('-b', '--busiest', dest='show_busiest',
 parser.add_argument('-v', '--verbose', dest='verbose', 
                     default=False, action='store_true',
                     help='print driver, device informations to stderr')
+parser.add_argument('-c', '--cpu', '--cores', dest='cpu',
+                    default=False, action='store_true',
+                    help='does nothing')
 
 exit(main(parser.parse_args()))

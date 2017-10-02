@@ -1,5 +1,5 @@
 #!/bin/bash
 
-source ~/theano/bin/activate
-python `dirname $0`/nvm.py ${*}
+source ~/theano2/bin/activate
+python2 `dirname $0`/nvm.py ${*}
 deactivate
