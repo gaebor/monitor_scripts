@@ -1,7 +1,4 @@
 #!/bin/bash
-
-monitor_cpu $1
-monitor_mem $1
-empty_line
-monitor_disk $1
-empty_line
+str1=`monitor.sh "${*}"`
+str2=`nvm "${*}"`
+hr -gi <<<"$str1 $str2"
