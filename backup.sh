@@ -1,3 +1,5 @@
+# for hints see https://softwarebakery.com/shrinking-images-on-linux
+
 DEVICE=/dev/sdc
 
 if [[ $1 ]]
