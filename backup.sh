@@ -5,11 +5,18 @@ then
     DEVICE=$1
 fi
 
-echo "[ backing up $DEVICE ]"
+echo -n "[ backing up $DEVICE to "
 
 FOLDER=/mnt/Fury/BackUp
 
-OUTPUTNAME=$FOLDER/`basename $DEVICE`_`date +"%Y_%m_%d"`
+if [[ "$2" ]]
+then
+    FOLDER="$2"
+fi
+
+OUTPUTNAME="$FOLDER/`basename $DEVICE`_`date +"%Y_%m_%d"`"
+
+echo "$OUTPUTNAME"
 
 PARTED_INFO="`sudo parted $DEVICE unit B p | sed "s/^\s\+//" | grep -v "^\s*$" | tail -n1 | sed "s/\s\+/\t/g"`"
 
@@ -82,7 +89,7 @@ fi
 chmod 777 $OUTPUTNAME.img
 rm $OUTPUTNAME.tmp
 
-echo "[ extend to the full disk ]"
+echo "[ extend partition to the full disk ]"
 DISK_SIZE=$((DISK_SIZE - 1))
 until sudo parted $DEVICE unit B resizepart $PARTITION $DISK_SIZE
 do
@@ -90,3 +97,17 @@ do
 done
 
 sudo parted $DEVICE unit B p | sed "s/^\s\+//" | grep -v "^\s*$" | tail -n1 | sed "s/\s\+/\t/g"
+if [[ $? -ne 0 ]]
+then
+exit 1
+fi
+
+echo "[ extend filesystem to the full disk ]"
+sudo resize2fs $FULLPARTITION 2>&1 | tee -a $OUTPUTNAME.log
+
+if [[ $? -ne 0 ]]
+then
+exit 1
+else
+echo "[DONE]"
+fi
