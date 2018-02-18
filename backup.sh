@@ -31,7 +31,14 @@ then
     exit 1
 fi
 
-FULLPARTITION=$DEVICE$PARTITION
+if [[ $3 ]]
+then
+    CUSTOMPARTITION=$3
+else
+    CUSTOMPARTITION=$PARTITION
+fi
+
+FULLPARTITION=$DEVICE$CUSTOMPARTITION
 
 DISK_SIZE=`lsblk --output=NAME,SIZE -b -p | grep "^$DEVICE\s" | cut -d" " -f2-`
 if [[ -z $DISK_SIZE ]]
@@ -39,18 +46,23 @@ then
     exit 1
 fi
 
-echo "[ make full backup ]"
-sudo dd status=progress if=$DEVICE bs=1M of=$OUTPUTNAME.tmp
-if [[ $? -ne 0 ]]
-then
-    exit 1
-fi
-
-echo "[ checking partition ]"
+echo "[ checking partition $FULLPARTITION]"
 sudo e2fsck -f $FULLPARTITION
 if [[ $? -ne 0 ]]
 then 
     exit 1
+fi
+
+if [[ -e $OUTPUTNAME.tmp ]]
+then
+    echo "[ found \"$OUTPUTNAME.tmp\" ]"
+else
+    echo "[ make full backup ]"
+    sudo dd status=progress if=$DEVICE bs=1M of=$OUTPUTNAME.tmp
+    if [[ $? -ne 0 ]]
+    then
+        exit 1
+    fi
 fi
 
 echo "[ shrink the last partition"
@@ -78,18 +90,22 @@ then
 exit 1
 fi
 
-sudo partprobe
-
-echo "[ make trimmed backup ]"
-sudo dd status=progress if=$DEVICE bs=1M of=$OUTPUTNAME.img \
-    count=$(((NEW_END + 1048575) / 1048576))
-if [[ $? -ne 0 ]]
+# sudo partprobe
+if [[ -e $OUTPUTNAME.img ]]
 then
-    exit 1
+    echo "[ found \"$OUTPUTNAME.img\" ]"
+else
+    echo "[ make trimmed backup ]"
+    sudo dd status=progress if=$DEVICE bs=1M of=$OUTPUTNAME.img \
+        count=$(((NEW_END + 1048575) / 1048576))
+    if [[ $? -ne 0 ]]
+    then
+        exit 1
+    fi
 fi
 
-chmod 777 $OUTPUTNAME.img
-rm $OUTPUTNAME.tmp
+chmod 777 $OUTPUTNAME.*
+# rm $OUTPUTNAME.tmp
 
 echo "[ extend partition to the full disk ]"
 DISK_SIZE=$((DISK_SIZE - 1))
