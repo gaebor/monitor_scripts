@@ -7,8 +7,6 @@ then
     DEVICE=$1
 fi
 
-echo -n "[ backing up $DEVICE to "
-
 FOLDER=/mnt/Fury/BackUp
 
 if [[ "$2" ]]
@@ -18,7 +16,7 @@ fi
 
 OUTPUTNAME="$FOLDER/`basename $DEVICE`_`date +"%Y_%m_%d"`"
 
-echo "$OUTPUTNAME"
+echo "[ backing up $DEVICE to \"$OUTPUTNAME\""
 
 PARTED_INFO="`sudo parted $DEVICE unit B p | sed "s/^\s\+//" | grep -v "^\s*$" | tail -n1 | sed "s/\s\+/\t/g"`"
 
@@ -46,7 +44,7 @@ then
     exit 1
 fi
 
-echo "[ checking partition $FULLPARTITION]"
+echo "[ checking partition $FULLPARTITION ]"
 sudo e2fsck -f $FULLPARTITION
 if [[ $? -ne 0 ]]
 then 
@@ -127,5 +125,5 @@ if [[ $? -ne 0 ]]
 then
 exit 1
 else
-echo "[DONE]"
+echo "[ DONE ]"
 fi
