@@ -24,7 +24,7 @@ fi
 
 # ps -Ao pcpu,rsz,fname,uname | tail -n+2 | sort -rgk1 | collapse |
 
-mem_str=`free -b | head -n 2 | tail -n 1 | python2 -c "import sys; print(' '.join(sys.stdin.readline().strip().split()[1:3]))"`
+mem_str=`free -b | head -n 2 | tail -n 1 | python2 -c "import sys; print ' '.join(sys.stdin.readline().strip().split()[1:3])"`
 
 top -n1 -b | \
 python -c "
@@ -63,9 +63,9 @@ for line in sys.stdin:
         high_mem_str = map(to8, line[2:])
     sum_proc += line[0]
 
-high_proc_str = '%-19s' % ('(' + ' '.join(high_proc_str) + ')') if $high_usage else ''
-high_mem_str = '%-19s' % ('(' + ' '.join(high_mem_str) + ')') if $high_usage else ''
-cores_str = ('%-5s' % '/$num_cores') if $show_cores else ''
-print('%'+ ('%-5d' % sum_proc), cores_str, high_proc_str,
+high_proc_str = ('(%-8s %-8s)' % tuple(high_proc_str)) if $high_usage else ''
+high_mem_str  = ('(%-8s %-8s)' % tuple(high_mem_str) ) if $high_usage else ''
+cores_str = ('%-4s' % '/$num_cores') if $show_cores else ''
+print('%%%-5d' % sum_proc, cores_str, high_proc_str,
       sum_mem, '/', mem_total, high_mem_str)
 "

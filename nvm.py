@@ -27,27 +27,28 @@ def main(args):
         if len(pid_str) > 1:
             busiest = pid_str[1].strip().split()
         
-    busiest_str = "(" + busiest[0] + " " + busiest[1] + ")"
-    print('%' +  '%-5d' % gpu_info.gpu, mem_info.used, '/', mem_info.total,
+    busiest_str = "(%-8s %-8s)" % tuple(busiest)
+    print('%%%-3d' % gpu_info.gpu, mem_info.used, '/', mem_info.total,
           busiest_str if args.show_busiest else "")
 
     nvmlShutdown()
     return 0
 
-parser = argparse.ArgumentParser(
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
                 description="NVidia Monitoring tool",
                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-parser.add_argument("-d", "--device", dest="device_index", type=int, default=0,
+    parser.add_argument("-d", "--device", dest="device_index", type=int, default=0,
                     help='device index')
-parser.add_argument('-b', '--busiest', dest='show_busiest', 
+    parser.add_argument('-b', '--busiest', dest='show_busiest', 
                     default=False, action='store_true',
                     help='show busiest process and user')
-parser.add_argument('-v', '--verbose', dest='verbose', 
+    parser.add_argument('-v', '--verbose', dest='verbose', 
                     default=False, action='store_true',
                     help='print driver, device informations to stderr')
-parser.add_argument('-c', '--cpu', '--cores', dest='cpu',
+    parser.add_argument('-c', '--cpu', '--cores', dest='cpu',
                     default=False, action='store_true',
                     help='does nothing')
 
-exit(main(parser.parse_args()))
+    exit(main(parser.parse_args()))
