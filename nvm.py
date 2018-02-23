@@ -1,8 +1,12 @@
 from __future__ import print_function
-from pynvml import *
 import argparse
 from subprocess import check_output
 
+try:
+    from py3nvml.py3nvml import *
+except:
+    from pynvml import *
+    
 def main(args):
     nvmlInit()
     
@@ -18,17 +22,21 @@ def main(args):
         if args.info:
             print(nvmlDeviceGetName(handle))
 
-        gpu_info = nvmlDeviceGetUtilizationRates(handle)
         mem_info = nvmlDeviceGetMemoryInfo(handle)
+        try:
+            gpu_info = nvmlDeviceGetUtilizationRates(handle)
+            gpu_info = gpu_info.gpu
+        except:
+            gpu_info = 0
 
-        gpu_usage += gpu_info.gpu
+        gpu_usage += 0        
         mem_usage += mem_info.used
         mem_total += mem_info.total
         
         busiest = ['-', '-']
         
-        if busiest_gpu < gpu_info.gpu:
-            busiest_gpu = gpu_info.gpu
+        if busiest_gpu < gpu_info:
+            busiest_gpu = gpu_info
             
             processes = nvmlDeviceGetComputeRunningProcesses(handle)
             processes.sort(key=lambda info: info.usedGpuMemory, reverse=True)
