@@ -6,7 +6,13 @@ then
     exit 0
 fi
 
-lsblk -o NAME,LABEL -l | tail -n+2 | add_lines | \
+function append_line()
+{
+    cat
+    echo
+}
+
+lsblk -o NAME,LABEL -l | tail -n+2 | append_line | \
 while read -r -a line
 do
     if [[ -z $device || -z `grep "^$device" <<<${line[0]}` ]]
@@ -14,5 +20,10 @@ do
         echo "$device $name"
         device=${line[0]}
     fi
-    name=${line[1]}
+    if [[ $name ]] && [[ ${line[1]} ]]
+    then
+        name="$name,${line[1]}"
+    else
+        name="${line[1]}"
+    fi
 done | tail -n+2
