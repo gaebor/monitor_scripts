@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 if [[ " ${*} " == *" -h "* ]]; then
     echo script for monitoring the cpu and memory usage
@@ -27,12 +27,12 @@ if [[ " ${*} " == *" -i "* ]]; then
     grep "model name" /proc/cpuinfo | cut -f2 -d":" | while read line
     do
         echo $line | column
-    done | uniq -c | sed "s/^ \+//"
+    done | uniq -c | sed "s/^ \+//" 1>&2
 fi
 
 # ps -Ao pcpu,rsz,fname,uname | tail -n+2 | sort -rgk1 | collapse |
 
-mem_str=`free -b | head -n 2 | tail -n 1 | python2 -c "import sys; print ' '.join(sys.stdin.readline().strip().split()[1:3])"`
+mem_str=`free -b | head -n 2 | tail -n 1 | python -c "import sys; print(' '.join(sys.stdin.readline().strip().split()[1:3]))"`
 
 top -n1 -b | \
 python -c "
@@ -40,7 +40,7 @@ from __future__ import print_function
 import sys
 
 def to8(s):
-    return s[:8]
+    return s[:8] if len(s) <= 8 else s[:6] + '~' + s[-1]
 
 sys.stdin.readline() # header
 sys.stdin.readline() # tasks

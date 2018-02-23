@@ -1,46 +1,10 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-function padding()
-{
-if [ ! -z "$1" ]
-then
-    pad_lines
-else
-    cat
-fi
-}
-
-if [ ! -z "$1" ]
-then
-    table=(`df -BK --output=source,used,pcent | tail -n+2 | collapse | grep -v "\s0%$" | sed "s/\([0-9]\+\)K/\1/" | sed "s/\([0-9]\+\)%/\1/"`)
-    max_size=8
-    for i in `seq 0 3 $((${#table[*]}-1))`
-    do
-        name=${table[$i]}
-        if [ $max_size -lt ${#name} ]
-        then
-            max_size=${#name}
-        fi
-    done
-    for i in `seq 0 3 $((${#table[*]}-1))`
-    do
-        name=${table[$i]}
-        USED=${table[$((i+1))]}
-        percent=${table[$((i+2))]}
-        
-        max_size=`max <<<"${#name} $max_size"`
-        printf "%-$((max_size))s %-7s " $name `hr --gibi <<<$((USED*1024))`
-        bar $((9+max_size)) <<<"$percent"
-    done
-    empty_line
-else
-    echo -e "disk\t\tused\ttotal\tfull"
-    df -h --output=source,used,size,pcent | tail -n+2 | grep -v "\s0%$"
-    echo
-fi
+df -h --output=source,used,size,pcent | grep -v "\s0%$" | column -t
+echo
 
 #device-name table
-devices=(`device_fs | grep -P "^[^ ]+ [^\n]+"`)
+devices=(`device_fs | sed "s/\(^[^ ]\+\) $/\1 -/"`)
 
 function find_name()
 {
@@ -55,25 +19,18 @@ function find_name()
     return 1
 }
 
-max_size=6
-for d in `device_fs | cut -f1 -d" "`
-do
-    if [ $max_size -lt ${#d} ]
-    then
-        max_size=${#d}
-    fi
-done
+function prepend()
+{
+    echo $1
+    cat
+}
 
-printf "%-$((max_size))s    read   write (Bytes/sec)\n" "device"
-disk_stat | \
+source disk_stat | \
 while read -r -a line
 do
-    state=`sudo -n hdparm -C /dev/${line[0]} 2> /dev/null | tail -n1 | cut -f2 -d":" | collapse`
-    printf "%-$((max_size))s %u %u $state " ${line[*]}
     if find_name ${line[0]} &> /dev/null
-    then
-        find_name ${line[0]}
-    else
-        echo
+    then 
+        state=`sudo -n hdparm -C /dev/${line[0]} 2> /dev/null | tail -n1 | cut -f2 -d":" | column`
+        printf "%s %f %f %s $state\n" ${line[*]} `find_name ${line[0]}`
     fi
-done | hr --gibi | padding $1
+done | prepend "device read write" | hr -gi |  column -t

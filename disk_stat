@@ -1,18 +1,17 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-tmp_dir="/home/.tmpfs/$USER"
-mkdir -p $tmp_dir
-touch $tmp_dir/.disk_time
-touch $tmp_dir/.disk_stat
+function append_line()
+{
+    cat
+    $1
+}
 
-NEW_STAT=`iostat -dk | tail -n+4 | collapse | cut -f1,5,6 -d" "`
-NEW_TIME=`date +%s`
+NEW_STAT=`sed "s/\s\+/ /g" /proc/diskstats | sed "s/^ //" | cut -f 3,6,10 -d " "`
+NEW_TIME=`date "+%s.%N"`
 
-DISK_TIME=`cat $tmp_dir/.disk_time 2> /dev/null`
-
-cat $tmp_dir/.disk_stat | add_lines "echo $NEW_STAT" | python2 -c "
+echo $DISK_STAT | append_line "echo $NEW_STAT" | python -c "
+from __future__ import print_function
 import sys
-from collections import defaultdict
 
 def read_stat():
     line = sys.stdin.readline().strip().split()
@@ -21,18 +20,19 @@ def read_stat():
 prev = read_stat()
 next = read_stat()
 
-diff = max(int($NEW_TIME)-int($DISK_TIME), 1)
+diff = float($NEW_TIME)-float($DISK_TIME)
+unit=1024.0
 
 for device in sorted(next):
-    sys.stdout.write(device)
+    print(device, end=' ')
     if device in prev:
-	for i in range(len(next[device])):
-	    sys.stdout.write(\" \" + str(int(1024.0*float(next[device][i]-prev[device][i]) / diff)))
+        for i in range(len(next[device])):
+            print(unit*(next[device][i]-prev[device][i]) / diff, end=' ')
     else:
-	for i in range(len(next[device])):
-	    sys.stdout.write(\" \" + str(int(1024.0*float(next[device][i]) / diff)))
-    print
+        for i in range(len(next[device])):
+            print(unit*(next[device][i]) / diff, end=' ')
+    print('')
 "
 
-echo $NEW_STAT > $tmp_dir/.disk_stat
-echo $NEW_TIME > $tmp_dir/.disk_time
+DISK_TIME=$NEW_TIME
+DISK_STAT=$NEW_STAT
