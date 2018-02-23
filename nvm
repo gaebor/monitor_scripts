@@ -1,6 +1,3 @@
 #!/bin/bash
 
-"""
-+see https://pypi.python.org/pypi/nvidia-ml-py/
-+"""
 python `dirname $0`/nvm.py ${*}

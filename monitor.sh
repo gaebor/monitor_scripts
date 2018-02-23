@@ -6,6 +6,7 @@ if [[ " ${*} " == *" -h "* ]]; then
     echo -e "\t-h\thelp"
     echo -e "\t-b\tshow busiest worker"
     echo -e "\t-c\tshow # of cores"
+    echo -e "\t-i\tshow cpu info in the first line"
     exit 0
 fi
 
@@ -20,6 +21,13 @@ fi
 
 if [[ " ${*} " == *" -c "* ]]; then
     show_cores=True
+fi
+
+if [[ " ${*} " == *" -i "* ]]; then
+    grep "model name" /proc/cpuinfo | cut -f2 -d":" | while read line
+    do
+        echo $line | column
+    done | uniq -c | sed "s/^ \+//"
 fi
 
 # ps -Ao pcpu,rsz,fname,uname | tail -n+2 | sort -rgk1 | collapse |
