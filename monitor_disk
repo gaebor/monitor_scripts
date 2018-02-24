@@ -1,16 +1,24 @@
 #!/usr/bin/env bash
 
-df -h --output=source,used,size,pcent | grep -v "\s0%$" | column -t
-echo
+### functions
 
-#device-name table
-devices=(`device_fs | sed "s/\(^[^ ]\+\) $/\1 -/"`)
+append_line()
+{
+    cat
+    echo $1
+}
 
-function find_name()
+prepend_line()
+{
+    echo $1
+    cat
+}
+
+find_name()
 {
     for i in `seq 0 2 $((${#devices[*]}-1))`
     do
-        if [ ${devices[$i]} = $1 ]
+        if [[ "${devices[$i]}" == "$1" ]]
         then
             echo ${devices[$((i+1))]}
             return 0
@@ -19,18 +27,115 @@ function find_name()
     return 1
 }
 
-function prepend()
+main()
 {
-    echo $1
-    cat
+
+### argument parsing
+if [[ " ${*} " == *" -h "* ]]
+then
+    echo script for monitoring disk usage
+    echo flags:
+    echo -e "\t-h\thelp"
+    echo -e "\t-f\tshow how full disks are (default)"
+    echo -e "\t-F\tturn \`-f\` off"
+    echo -e "\t-s\tshow accumulated io activity in Bytes/second"
+    echo -e "\t-S\tturn \`-S\` off"
+    echo -e "\t-i/-b\tshow idle/busy state if available (requires \`sudo hdparm\`)"
+    return 0
+fi
+
+SHOW_F=1
+SHOW_S=0
+SHOW_IB=0
+
+if [[ ! " ${*} " == *" -F "* ]]
+then
+    SHOW_F=1
+else
+    SHOW_F=0
+fi
+
+if [[ " ${*} " == *" -s "* ]] && [[ ! " ${*} " == *" -S "* ]]
+then
+    SHOW_S=1
+else
+    SHOW_S=0
+fi
+
+if [[ " ${*} " == *" -i "* ]] || [[ " ${*} " == *" -b "* ]]
+then
+  SHOW_IB=1  
+fi
+
+### stuff
+
+if [[ $SHOW_F -gt 0 ]]
+then
+    df -h --output=source,used,size,pcent | grep -v "\s0%$" | column -t
+    if [[ $SHOW_S -gt 0 ]]
+    then
+        echo
+    fi
+fi
+
+if [[ $SHOW_S -gt 0 ]]
+then
+    #device-name table
+    devices=(`device_fs | sed "s/\(^[^ ]\+\) $/\1 -/"`)
+
+    NEW_TIME=`date "+%s.%N"`
+    NEW_STAT=`sed "s/\s\+/ /g" /proc/diskstats | sed "s/^ //" | cut -f 3,6,10 -d " "`
+
+    DISK_TIME=`head -n1 ~/.disk_stat 2> /dev/null`
+    DISK_STAT=`tail -n+2 ~/.disk_stat 2> /dev/null`
+    
+    echo "$NEW_TIME" > ~/.disk_stat
+    echo "$NEW_STAT" >> ~/.disk_stat
+    
+    state_label=""
+    
+    if [[ $SHOW_IB -gt 0 ]]
+    then 
+        state_label=" state"
+    fi
+    
+    echo "$DISK_STAT" | append_line "$NEW_STAT" | python -c "
+from __future__ import print_function
+import sys
+
+def read_stat():
+    line = sys.stdin.readline().strip().split()
+    return {line[i]: (int(line[i+1]), int(line[i+2])) for i in range(0, len(line), 3)}
+
+prev = read_stat()
+next = read_stat()
+
+diff = float($NEW_TIME)-float($DISK_TIME)
+unit=1024.0
+
+for device in sorted(next):
+    print(device, end=' ')
+    if device in prev:
+        for i in range(len(next[device])):
+            print(unit*(next[device][i]-prev[device][i]) / diff, end=' ')
+    else:
+        for i in range(len(next[device])):
+            print(unit*(next[device][i]) / diff, end=' ')
+    print('')
+" | \
+    while read -r -a line
+    do
+        if find_name ${line[0]} &> /dev/null
+        then
+            if [[ $SHOW_IB -gt 0 ]]
+            then 
+                state=`sudo -n hdparm -C /dev/${line[0]} 2> /dev/null | tail -n1 | cut -f2 -d":" | column`
+            fi
+            printf "%s %f %f %s $state\n" ${line[*]} `find_name ${line[0]}`
+        fi
+    done | prepend_line "device read write name$state_label" | hr -gi |  column -t
+    
+fi
 }
 
-source disk_stat | \
-while read -r -a line
-do
-    if find_name ${line[0]} &> /dev/null
-    then 
-        state=`sudo -n hdparm -C /dev/${line[0]} 2> /dev/null | tail -n1 | cut -f2 -d":" | column`
-        printf "%s %f %f %s $state\n" ${line[*]} `find_name ${line[0]}`
-    fi
-done | prepend "device read write" | hr -gi |  column -t
+main ${*}
