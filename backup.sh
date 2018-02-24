@@ -1,13 +1,13 @@
 # for hints see https://softwarebakery.com/shrinking-images-on-linux
 
-DEVICE=/dev/sdc
+DEVICE=/dev/sda
 
 if [[ $1 ]]
 then
     DEVICE=$1
 fi
 
-FOLDER=/mnt/Fury/BackUp
+FOLDER=.
 
 if [[ "$2" ]]
 then
@@ -123,7 +123,7 @@ sudo resize2fs $FULLPARTITION 2>&1 | tee -a $OUTPUTNAME.log
 
 if [[ $? -ne 0 ]]
 then
-exit 1
+    exit 1
 else
-echo "[ DONE ]"
+    echo "[ DONE ]"
 fi

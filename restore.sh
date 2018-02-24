@@ -65,5 +65,3 @@ then
 else
     echo "[ DONE ]"
 fi
-
-exit
