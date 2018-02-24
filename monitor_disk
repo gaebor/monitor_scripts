@@ -14,7 +14,7 @@ prepend_line()
     cat
 }
 
-find_name()
+find_name ()
 {
     for i in `seq 0 2 $((${#devices[*]}-1))`
     do
@@ -27,8 +27,8 @@ find_name()
     return 1
 }
 
-main()
-{
+for x in 0
+do
 
 ### argument parsing
 if [[ " ${*} " == *" -h "* ]]
@@ -41,7 +41,7 @@ then
     echo -e "\t-s\tshow accumulated io activity in Bytes/second"
     echo -e "\t-S\tturn \`-S\` off"
     echo -e "\t-i/-b\tshow idle/busy state if available (requires \`sudo hdparm\`)"
-    return 0
+    break
 fi
 
 SHOW_F=1
@@ -81,8 +81,8 @@ fi
 if [[ $SHOW_S -gt 0 ]]
 then
     #device-name table
-    devices=(`device_fs | sed "s/\(^[^ ]\+\) $/\1 -/"`)
-
+    export devices=(`device_fs | sed "s/\(^[^ ]\+\) $/\1 -/"`)
+    
     NEW_TIME=`date "+%s.%N"`
     NEW_STAT=`sed "s/\s\+/ /g" /proc/diskstats | sed "s/^ //" | cut -f 3,6,10 -d " "`
 
@@ -99,7 +99,7 @@ then
         state_label=" state"
     fi
     
-    echo "$DISK_STAT" | append_line "$NEW_STAT" | python -c "
+    echo $DISK_STAT | append_line "$NEW_STAT" | python -c "
 from __future__ import print_function
 import sys
 
@@ -136,6 +136,5 @@ for device in sorted(next):
     done | prepend_line "device read write name$state_label" | hr -gi |  column -t
     
 fi
-}
 
-main ${*}
+done
