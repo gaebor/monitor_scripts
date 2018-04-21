@@ -1,4 +1,17 @@
 #!/bin/bash
-str1=`monitor.sh "${*}"`
-str2=`nvm "${*}"`
+args="${*}"
+
+if [[ " $args " != *" -C "* ]]
+then
+    str1=`monitor.sh $args`
+else
+    args=`sed "s/ -C//g" <<<" $args "`
+fi
+
+if [[ " $args " == *" -g "* ]]
+then
+    args=`sed "s/ -g//g" <<<" $args "`
+    str2=`nvm $args`
+fi
+
 hr -gi <<<"$str1 $str2"
