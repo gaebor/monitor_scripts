@@ -19,11 +19,10 @@ do
     then
         echo "$device $name"
         device=${line[0]}
+        name="${line[1]}"
     fi
-    if [[ $name ]] && [[ ${line[1]} ]]
+    if [[ ${line[1]} ]]
     then
-        name="$name,${line[1]}"
-    else
         name="${line[1]}"
     fi
 done | tail -n+2
