@@ -15,7 +15,8 @@ def main(args):
     gpu_usage = 0
     mem_usage = 0
     mem_total = 0
-    
+    busiest = ['-', '-']
+
     num_devices = nvmlDeviceGetCount()
     for deviceCount in range(num_devices):
         handle = nvmlDeviceGetHandleByIndex(args.device_index)
@@ -31,8 +32,6 @@ def main(args):
         gpu_usage += gpu_info
         mem_usage += mem_info.used
         mem_total += mem_info.total
-        
-        busiest = ['-', '-']
         
         if busiest_gpu < gpu_info:
             busiest_gpu = gpu_info
