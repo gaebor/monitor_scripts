@@ -3,13 +3,10 @@ num_cores=`grep "^processor\s" /proc/cpuinfo | wc -l`
 # idle_perc=`mpstat | tail -n1 | collapse | tr " " "\n" | tail -n1`
 # active_perc=`bc <<<"100.0-$idle_perc"`
 core_perc=`ps -A -o pcpu | tail -n+2 | python2 -c "import sys; print sum(float(x.strip()) for x in sys.stdin)"`
-core_perc=`echo $((num_cores*100)) $core_perc | min`
+# core_perc=`echo $((num_cores*100)) $core_perc | min`
 
-if [ ! -z $1 ]
+if [ ! -z "$1" ]
 then
-    echo -n "CPU     "
-    bc <<<"$core_perc/$num_cores" | bar 8
-else
-    grep "model name" /proc/cpuinfo | cut -f2 -d":" | uniq -c | sed "s/^\s\+//" | collapse
-    echo "CPU%: $core_perc"
+    grep "model name" /proc/cpuinfo | cut -f2 -d":" | uniq -c | sed "s/^\s\+//"
 fi
+echo "CPU%: $core_perc"
