@@ -8,6 +8,9 @@ try:
 except:
     from pynvml import *
     
+def to8(s):
+    return s[:8] if len(s) <= 8 else s[:6] + '~' + s[-1]
+
 def main(args):
     nvmlInit()
     
@@ -18,8 +21,8 @@ def main(args):
     busiest = ['-', '-']
 
     num_devices = nvmlDeviceGetCount()
-    for deviceCount in range(num_devices):
-        handle = nvmlDeviceGetHandleByIndex(args.device_index)
+    for device_index in range(num_devices):
+        handle = nvmlDeviceGetHandleByIndex(device_index)
         
         if args.info:
             print(nvmlDeviceGetName(handle))
@@ -35,12 +38,13 @@ def main(args):
         
         if busiest_gpu < gpu_info:
             busiest_gpu = gpu_info
-            
+
             processes = nvmlDeviceGetComputeRunningProcesses(handle)
             processes.sort(key=lambda info: info.usedGpuMemory, reverse=True)
             
             if len(processes) > 0:
                 busiest_pid = processes[0].pid
+
                 pid_str = ""
                 try:
                     pid_str = check_output(["ps", "--pid=%d" % busiest_pid, "-o", "fname,uname"]).split('\n')
@@ -49,7 +53,7 @@ def main(args):
                 if len(pid_str) > 1:
                     busiest = pid_str[1].strip().split()
                 
-    busiest_str = "(%-8s %-8s)" % tuple(busiest)
+    busiest_str = "(%-8s %-8s)" % tuple(map(to8,busiest))
 
     print('%%%-3d' % gpu_usage, mem_usage, '/', mem_total,
           busiest_str if args.show_busiest else "")
