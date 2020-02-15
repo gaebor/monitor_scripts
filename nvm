@@ -11,6 +11,17 @@ except:
 def to8(s):
     return s[:8] if len(s) <= 8 else s[:6] + '~' + s[-1]
 
+def get_process_info(pid):
+    try:
+        pid_str = check_output(["ps", "--pid=%d" % pid, "-o", "fname,uname"]).split('\n')
+    except:
+        return ['?', '?']
+    else:
+        if len(pid_str) > 1:
+            return pid_str[1].strip().split()
+        else:
+            return ['?', '?']
+
 def main(args):
     nvmlInit()
     
@@ -36,23 +47,11 @@ def main(args):
         mem_usage += mem_info.used
         mem_total += mem_info.total
         
-        if busiest_gpu < gpu_info:
-            busiest_gpu = gpu_info
-
-            processes = nvmlDeviceGetComputeRunningProcesses(handle)
-            processes.sort(key=lambda info: info.usedGpuMemory, reverse=True)
-            
-            if len(processes) > 0:
-                busiest_pid = processes[0].pid
-
-                pid_str = ""
-                try:
-                    pid_str = check_output(["ps", "--pid=%d" % busiest_pid, "-o", "fname,uname"]).split('\n')
-                except:
-                    busiest = ['?', '?']
-                if len(pid_str) > 1:
-                    busiest = pid_str[1].strip().split()
-                
+        processes = nvmlDeviceGetComputeRunningProcesses(handle)
+        processes.sort(key=lambda info: info.usedGpuMemory, reverse=True)
+        if len(processes) > 0:
+            busiest = get_process_info(processes[0].pid)
+        
     busiest_str = "(%-8s %-8s)" % tuple(map(to8,busiest))
 
     print('%%%-3d' % gpu_usage, mem_usage, '/', mem_total,
