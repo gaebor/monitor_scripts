@@ -1,0 +1,11 @@
+#!/bin/bash
+
+for machine in $1
+do
+    (if [ `hostname` = $machine ]
+    then
+        bash -c "$2"
+    else
+        ssh $machine "$2"
+    fi) |& sed "s/^/[${machine:0:5}]\t/"
+done
