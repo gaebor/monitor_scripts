@@ -339,22 +339,22 @@ table.tt{
             
             r.append('<h2>Disk I/O</h2>')
             update_sector_sizes()
-            devices = [device for device in sector_sizes if device[:4] != "loop"]
+            forbidden_disks = [] if "exclude" not in self.query else self.query["exclude"]
+            devices = [device for device in sector_sizes if not any(name in device for name in forbidden_disks)]
+            devices.sort()
             if "vertical" in self.query:
                 for device in devices:
                     r.append('<h3>{}</h3>'.format(device))
                     r.append(compose_io_graph(device, **self.query))
-            else:        
+            else:
                 r.append('<table><tr>')
                 for device in devices:
-                    if device[:4] != "loop":
-                        r.append('<th>{}</th>'.format(device))
+                    r.append('<th>{}</th>'.format(device))
                 r.append('</tr><tr>')
                 for device in devices:
-                    if device[:4] != "loop":
-                        r.append('<td>')
-                        r.append(compose_io_graph(device, **self.query))
-                        r.append('</td>')
+                    r.append('<td>')
+                    r.append(compose_io_graph(device, **self.query))
+                    r.append('</td>')
                 r.append('</tr></table>')
 
             r.append('<h2 class="rolldownheader">Storage</h2>')
