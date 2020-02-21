@@ -24,7 +24,7 @@ ticks = int(check_output("""FILENAME=`tempfile`; echo '#include <unistd.h>
 int main(){printf("%lu", sysconf(_SC_CLK_TCK)); return 0;}
 ' > $FILENAME.c && gcc -o $FILENAME $FILENAME.c && $FILENAME && rm $FILENAME $FILENAME.c"""))
 
-pid_to_hue = 360/int(open('/proc/sys/kernel/pid_max').read().strip())
+pid_to_hue = 360/1000 # 360/int(open('/proc/sys/kernel/pid_max').read().strip())
 cpu_info = check_output("grep '^model name' /proc/cpuinfo | "
                         "cut -f2 -d':' | uniq -c | sed 's/^\s\+//'")
 cpu_cores = len(check_output(["grep", "processor", "/proc/cpuinfo"]).strip().split("\n"))
@@ -57,62 +57,51 @@ def update_pid_times(dt=60):
 
 def compose_cpu_graph():
     height = cpu_cores*100
-    result = '<svg width="300" height="{}">\n'.format(height+30)
-    result += '<g transform="translate(15,10)">\n'
-    result += ' <path stroke="black" stroke-width="2" fill=none d="M0 0 L0 {0} L240 {0}" />\n'.format(height)
-    result += ' <text font-size="20" fill="black" stroke="none" text-anchor="middle" x="240" y="{0}" dy="20">{1}</text>\n'.format(height, time.strftime("%H:%m:%S"))
-    result += ' <g font-size="15" fill="black" stroke="none">\n'
-    result += '  <g text-anchor="end">\n'
+    r = []
+    r.append('<svg width="300" height="{}">'.format(height+30))
+    r.append('<g transform="translate(15,10)">')
+    r.append(' <path stroke="black" stroke-width="2" fill=none d="M0 0 L0 {0} L240 {0}" />'.format(height))
+    r.append(' <text font-size="20" fill="black" stroke="none" text-anchor="middle" x="240" y="{0}" dy="20">{1}</text>'.format(height, time.strftime("%H:%M:%S")))
+    r.append(' <g font-size="15" fill="black" stroke="none">')
+    r.append('  <g text-anchor="end">')
     for i in range(1, cpu_cores+1):
-        result += '   <text x="0" y="{0}" dx="-5">{1}</text>\n'.format((cpu_cores-i)*100, i)
-    result += '  </g><g text-anchor="middle">\n'
+        r.append('   <text x="0" y="{0}" dx="-5">{1}</text>'.format((cpu_cores-i)*100, i))
+    r.append('  </g><g text-anchor="middle">')
     for i in range(-60, 0, 15):
-        result += '   <text x="{0}" y="{1}" dy="16">{i}</text>\n'.format(240+i*4, height, i=i)
-    result += ' <g>\n'
-    result += '<g stroke="black" stroke-width="1" fill=none>\n'
+        r.append('   <text x="{0}" y="{1}" dy="16">{i}</text>'.format(240+i*4, height, i=i))
+    r.append(' <g>')
+    r.append('<g stroke="black" stroke-width="1" fill=none>')
     for i in range(1, cpu_cores+1):
-        result += '   <path d="M-5 {0} L0 {0}" />\n'.format(height - i*100)
+        r.append('   <path d="M-5 {0} L0 {0}" />'.format(height - i*100))
     for i in range(0, -60, -15):
-        result += '   <path d="M{0} {1} L{0} {2}" />\n'.format(240+4*i, height+5, height)
-    result += ' </g>\n'
-    result += '</g>\n'
-    result += 'Sorry, your browser does not support inline SVG.\n</svg>'
-    """<svg width="300" height="230">
-	<g transform="translate(15,10)">
-    		<path stroke="black" stroke-width="2" fill=none d="M0 0 L0 200 L240 200" />
-            <text font-size="20" fill="black" stroke="none" text-anchor="middle" x="240" y="200" dy="20">01:02:50</text>
-            <g font-size="15" fill="black" stroke="none">
-              <g text-anchor="end">
-                <text x="0" y="0" dx="-5">2</text>
-                <text x="0" y="100" dx="-5">1</text>
-              </g>
-              <g text-anchor="middle">
-                <text x="0" y="200" dy="16">-60</text>
-                <text x="60" y="200" dy="16">-45</text>
-                <text x="120" y="200" dy="16">-30</text>
-                <text x="180" y="200" dy="16">-15</text>
-              </g>
-            </g>
-            <g stroke="black" stroke-width="1" fill=none>
-            	<path d="M-5 0 L0 0" />
-                <path d="M-5 100 L0 100" />
-            </g>
-            <g stroke="black" stroke-width="1" fill=none>
-				<path d="M0 205 L0 200" />
-				<path d="M60 205 L60 200" />
-                <path d="M120 205 L120 200" />
-                <path d="M180 205 L180 200" />
-                <path d="M240 205 L240 200" />
-            </g>
-            <g>
-            	<rect x="0" y="180" width="40" height="20" style="fill:hsl(10.0, 100%, 75%);stroke:none;" />
-                <rect x="0" y="160" width="40" height="20" style="fill:hsl(80, 100%, 75%);stroke:none;" />
-                <rect x="40" y="50" width="40" height="150" style="fill:hsl(240, 100%, 75%);stroke:none;" />
-  			</g>
-  	</g>
-  Sorry, your browser does not support inline SVG.
-</svg>"""
-    return result
+        r.append('   <path d="M{0} {1} L{0} {2}" />'.format(240+4*i, height+5, height))
+    r.append(' </g>')
+    if len(pid_times) > 1:
+        r.append('<g transform="scale(1, -1)"><g transform="translate(0,{})">'.format(-height))
+        pid_times_sorted = list((key, pid_times[key]) for key in sorted(pid_times))
+        currenttime = 60 - pid_times_sorted[-1][0]
+        previous_t, previous_pids = pid_times_sorted[0]
+        for t, pids in pid_times_sorted[1:]:
+            y = 0
+            x = currenttime + previous_t
+            dt = t - previous_t
+            for pid in sorted(pids):
+                if pid in previous_pids:
+                    dy = pids[pid] - previous_pids[pid]
+                else:
+                    dy = pids[pid]
+                dy /= dt
+                r.append('<rect x="{x}" y="{y}" width="{w}" height="{h}" style="fill:hsl({hue}, 100%, 75%);stroke:none;" />'.format(
+                        x=4*x, y=100*y, h=100*dy, w=4*dt,
+                        hue=pid_to_hue*pid
+                        ))
+                y += dy
+            previous_t, previous_pids = t, pids
+        r.append('</g></g>')
+    r.append('</g>')
+    r.append('Sorry, your browser does not support inline SVG.')
+    r.append('</svg>')
+    return "\n".join(r)
 
 def get_proc_info(pid):
     try:
@@ -219,11 +208,10 @@ table.tt{
             r.append(cpu_info)
             r.append('</p>')
             r.append(compose_cpu_graph())
-            r.append(htmltable(check_output(
-                        ["ps", "-a", "-f", "-o", "%cpu,%mem,uid,command", "--sort", "-%cpu"]
-                        # " | grep -vP '^ *\d+\.\d+ +\d+\.\d+ +0 '"
-                        ),
-                        'class=tt', head=True, columns=3))
+            pid_percents = check_output(["ps", "-a", "-f", "-o", "%cpu,%mem,uid,command", "--sort", "-%cpu"])
+            # " | grep -vP '^ *\d+\.\d+ +\d+\.\d+ +0 '"
+            pid_percents = "\n".join(pid for pid in pid_percents.strip("\n").split("\n") if pid.split()[2] != "0")
+            r.append(htmltable(pid_percents, 'class=tt', head=True, columns=3))
 
             r.append('<h3>Memory</h3>')
             r.append(htmltable("*" + check_output(["free", "-h"]), 'class=tt', head=True, columns=6))
@@ -238,47 +226,6 @@ table.tt{
             r.append('<h2 class="rolldownheader">Disk I/O</h2>')
             r.append(htmltable(check_output("monitor_disk -s -F -i"), 
                         'class=tt', head=True, columns=4))
- 
-            # time.strftime("%H:%m:%S")
-            """
-<svg width="1000" height="1000">
-	<g transform="translate(20,20)">
-            <g stroke="black" stroke-width="2" fill=none>
-                  <path d="M0 0 L0 200 L240 200" />
-            </g>
-            <g font-size="15" fill="black" stroke="none" text-anchor="end">
-                <text x="0" y="0" dx="-5">2</text>
-                <text x="0" y="100" dx="-5">1</text>
-            </g>
-            <g font-size="15" fill="black" stroke="none" text-anchor="middle">
-                <text x="0" y="200" dy="15">-60s</text>
-                <text x="60" y="200" dy="15">-45s</text>
-            </g>
-            <g stroke="black" stroke-width="1" fill=none>
-                  <path d="M-5 0 L0 0" />
-                  <path d="M-5 100 L0 100" />
-            </g>
-            <g stroke="black" stroke-width="1" fill=none>
-            	<path d="M60 205 L60 200" />
-                <path d="M120 205 L120 200" />
-                <path d="M180 205 L180 200" />
-                <path d="M240 205 L240 200" />
-            </g>
-  			<g font-size="20" font-family="sans-serif" fill="black" stroke="none" text-anchor="left">
-                  <text x="240" y="200">01:02:50</text>
-            </g>
-            <g>
-            	<rect x="20" y="180" width="40" height="20" style="fill:hsl(10.0, 100%, 75%);stroke:none;" />
-                <rect x="20" y="160" width="40" height="20" style="fill:hsl(80, 100%, 75%);stroke:none;" />
-                <rect x="60" y="50" width="40" height="150" style="fill:hsl(240, 100%, 75%);stroke:none;" />
-  			</g>
-            <!-- <g stroke="none" fill=red>
-                  <path d="M20 200 L20 100 L30 110 L40 90 L50 90 L60 120 L60 200" />
-            </g> -->
-  	</g>
-            Sorry, your browser does not support inline SVG.
-            </svg>
-            """
             r.append('</body></html>')
             return '\n'.join(r)
 
@@ -299,8 +246,8 @@ table.tt{
             f.close()
 
     def send_head(self):
+        update_pid_times()
         requested_path = urllib.parse.unquote(self.path)
-        print(requested_path)
         if requested_path == '/':
             content = self.assemble_html_content()
             return self.send_html_content(content)
