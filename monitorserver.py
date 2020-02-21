@@ -4,6 +4,7 @@ from http import HTTPStatus
 from html import escape as htmlescape
 from socket import gethostname
 import subprocess, time, os, glob
+from collections import OrderedDict
 
 import argparse
 import datetime
@@ -13,67 +14,104 @@ import shutil
 
 import urllib.parse
 
-def check_output(command):
+def check_output(command, stderr=False):
     return subprocess.run(command, 
                 stdout=subprocess.PIPE,
+                stderr=(subprocess.STDOUT if stderr else None),
                 shell=(type(command) == str),
-                universal_newlines=True).stdout
+                universal_newlines=True, check=False).stdout
 
 ticks = int(check_output("""FILENAME=`tempfile`; echo '#include <unistd.h>
 #include <stdio.h>
 int main(){printf("%lu", sysconf(_SC_CLK_TCK)); return 0;}
 ' > $FILENAME.c && gcc -o $FILENAME $FILENAME.c && $FILENAME && rm $FILENAME $FILENAME.c"""))
 
-pid_to_hue = 360/1000 # 360/int(open('/proc/sys/kernel/pid_max').read().strip())
+pid_max = int(open('/proc/sys/kernel/pid_max').read().strip())
 cpu_info = check_output("grep '^model name' /proc/cpuinfo | "
                         "cut -f2 -d':' | uniq -c | sed 's/^\s\+//'")
 cpu_cores = len(check_output(["grep", "processor", "/proc/cpuinfo"]).strip().split("\n"))
 
-def get_pid_time(pid=None):
-    if type(pid) == int:
-        filename = '/proc/' + str(pid) + '/stat'
-    else:
-        filename = '/proc/[0-9]*/stat'
+sector_sizes = {}
+
+def update_sector_sizes():
+    for file in glob.glob("/sys/block/*/queue/hw_sector_size"):
+        try:
+            with open(file) as f:
+                sector_sizes[file.split("/")[3]] = int(f.read().strip())
+        except OSError:
+            continue
+update_sector_sizes()
+
+def get_pid_times():
     result = {}
-    for file in glob.glob(filename):
+    for file in glob.glob('/proc/[0-9]*/stat'):
         try:
             with open(file) as f:
                 content = f.read().strip().split()
-        except OSError as e:
+        except OSError:
             continue
         else:
             result[int(file.split('/')[2])] = (int(content[13]) + int(content[14]))/ticks
     return result
 
-pid_times = {time.time(): get_pid_time()}
+def get_disk_activities():
+    try:
+        with open('/proc/diskstats') as f:
+            content = f.read()
+    except OSError:
+        return {}
+    result = {}
+    for line in content.strip().split('\n'):
+        line = line.split()
+        if len(line) >= 14:
+            result[line[2]] = (int(line[5]), int(line[9]))
+            if line[2] in sector_sizes:
+                result[line[2]] *= sector_sizes[line[2]]
+    return result
 
-def update_pid_times(dt=60):
-    global pid_times
-    currenttime = time.time()
-    pid_times[currenttime] = get_pid_time()
-    for key in list(pid_times.keys()):
-        if key < currenttime - dt and key in pid_times:
-            del pid_times[key]
+class TimedDict:
+    def __init__(self, f):
+        self.updater = f
+        self.d = OrderedDict({time.time(): f()})
+    def update(self, dt=60):
+        currenttime = time.time()
+        self.d[currenttime] = self.updater()
+        for key in list(self.d.keys()):
+            if key < currenttime - dt and key in self.d:
+                del self.d[key]
 
-def compose_cpu_graph(*args, timewindow=60, t_mul=4, y_mul=100, **kwargs):
+pid_times = TimedDict(get_pid_times)
+disk_activities = TimedDict(get_disk_activities)
+
+def query_to_type(q, t, default):
     try:
-        timewindow = int(timewindow[0])
+        if t == float:
+            if len(q) == 1:
+                return t(q[0])
+            elif len(q) == 2:
+                return t(q[0] + "." + q[1])
+            else:
+                return default
+        elif t == int:
+            return t(q[0])
+        else:
+            return q # list of strings
     except:
-        timewindow = 60
-    try:
-        t_mul = int(t_mul[0])
-    except:
-        t_mul = 4
-    try:
-        y_mul = int(y_mul[0])
-    except:
-        y_mul = 100
-    update_pid_times(dt=timewindow)
+        return default
+
+def compose_cpu_graph(*args, timewindow=60, t_mul=4, y_mul=100, pid_mul=1, **kwargs):
+    pid_mul = query_to_type(pid_mul, float, 1)
+    timewindow = query_to_type(timewindow, float, 60)
+    t_mul = query_to_type(t_mul, float, 4)
+    y_mul = query_to_type(y_mul, float, 100)
+
+    pid_times.update(dt=timewindow)
     
     height = cpu_cores*y_mul
+    width = timewindow*t_mul
     r = []
-    r.append('<svg height="{}" width="{}">'.format(height+30, timewindow*t_mul+50))
-    r.append('<g transform="translate(15,10)">')
+    r.append('<svg height="{}" width="{}">'.format(height+30, width+80))
+    r.append('<g transform="translate(30,10)">')
     r.append(' <path stroke="black" stroke-width="2" fill=none d="M0 0 L0 {0} L{1} {0}" />'.format(height, timewindow*t_mul))
     r.append(' <text font-size="20" fill="black" stroke="none" text-anchor="middle" x="{1}" y="{0}" dy="20">{2}</text>'.format(height, timewindow*t_mul, time.strftime("%H:%M:%S")))
     r.append(' <g font-size="15" fill="black" stroke="none">')
@@ -81,18 +119,18 @@ def compose_cpu_graph(*args, timewindow=60, t_mul=4, y_mul=100, **kwargs):
     for i in range(1, cpu_cores+1):
         r.append('   <text x="0" y="{0}" dx="-5">{1}</text>'.format((cpu_cores-i)*y_mul, i))
     r.append('  </g><g text-anchor="middle">')
-    for i in range(-timewindow, 0, timewindow//4):
+    for i in range(int(-timewindow), 0, int(timewindow/4)):
         r.append('   <text x="{0}" y="{1}" dy="16">{i}</text>'.format((timewindow+i)*t_mul, height, i=i))
     r.append(' <g>')
     r.append('<g stroke="black" stroke-width="1" fill=none>')
     for i in range(1, cpu_cores+1):
         r.append('   <path d="M-5 {0} L0 {0}" />'.format(height - i*y_mul))
-    for i in range(-timewindow, 0, timewindow//4):
+    for i in range(int(-timewindow), 0, int(timewindow/4)):
         r.append('   <path d="M{0} {1} L{0} {2}" />'.format(t_mul*(timewindow+i), height+5, height))
     r.append(' </g>')
-    if len(pid_times) > 1:
+    if len(pid_times.d) > 1:
         r.append('<g transform="scale(1, -1)"><g transform="translate(0,{})">'.format(-height))
-        pid_times_sorted = list((key, pid_times[key]) for key in sorted(pid_times))
+        pid_times_sorted = list(pid_times.d.items())
         currenttime = timewindow - pid_times_sorted[-1][0]
         previous_t, previous_pids = pid_times_sorted[0]
         for t, pids in pid_times_sorted[1:]:
@@ -107,7 +145,7 @@ def compose_cpu_graph(*args, timewindow=60, t_mul=4, y_mul=100, **kwargs):
                 dy /= dt
                 r.append('<rect x="{x}" y="{y}" width="{w}" height="{h}" style="fill:hsl({hue}, 100%, 75%);stroke:none;" />'.format(
                         x=t_mul*x, y=y_mul*y, h=y_mul*dy, w=t_mul*dt,
-                        hue=pid_to_hue*pid
+                        hue=pid_mul*pid*360/pid_max
                         ))
                 y += dy
             previous_t, previous_pids = t, pids
@@ -124,7 +162,7 @@ def get_proc_info(pid):
         with open('/proc/' + str(pid) + '/stat') as f:
             parent = int(f.read().strip().split()[3])
         userid = os.stat("/proc/" + str(pid)).st_uid
-    except OSError as e:
+    except OSError:
         return {}
     else:
         return {"cmdline": cmdline, "user": userid, "parent": parent}
@@ -149,25 +187,6 @@ def htmltable(text, *extra, head=False, columns=3):
 
     r.append("</table>")
     return "\n".join(r)
-
-def get_sector_sizes():
-    d={}
-    for file in glob.glob("/sys/block/*/queue/hw_sector_size"):
-        try:
-            with open(file) as f:
-                d[file.split("/")[3]] = int(f.read().strip())
-        except OSError:
-            pass
-    return d
-    
-def get_disk_stat():
-    with open('/proc/diskstats') as f:
-        content = f.read().strip().split('\n')
-    d = {}
-    for line in content:
-        line = line.split()
-        d[line[2]] = (int(line[5]), int(line[9]))
-    return d
                 
 class MemoryHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
     server_version = "MemoryHTTP/" + http.server.__version__
@@ -202,7 +221,11 @@ table.tt{
     border: 2px solid black;
     border-collapse: collapse;
 }
-*.rolldown > *.rolldowncontent {
+*.rolldown *.rolldownheader {
+    border-bottom: 1px dotted grey;
+    transition-property: border-bottom;
+}
+*.rolldown *.rolldowncontent {
     max-height: 0;
     overflow: hidden;
     transition-property: max-height;
@@ -210,6 +233,10 @@ table.tt{
 }
 *.rolldown:hover *.rolldowncontent {
     max-height: 700px;
+    overflow-y: auto;
+}
+*.rolldown:hover *.rolldownheader {
+    border-bottom: 1px hidden;
 }
 """)
             r.append('</style>')
@@ -223,19 +250,23 @@ table.tt{
             r.append('</p>')
             r.append(compose_cpu_graph(**self.query))
             pid_percents = check_output(["ps", "-a", "-f", "-o", "%cpu,%mem,uid,command", "--sort", "-%cpu"])
-            # " | grep -vP '^ *\d+\.\d+ +\d+\.\d+ +0 '"
             pid_percents = "\n".join(pid for pid in pid_percents.strip("\n").split("\n") if pid.split()[2] != "0")
+            
+            r.append('<div class="rolldown">')
+            r.append('<h3 class="rolldownheader">ps</h3>')
+            r.append('<div class=rolldowncontent>')
             r.append(htmltable(pid_percents, 'class=tt', head=True, columns=3))
-
-            r.append('<h3>Memory</h3>')
+            r.append('</div></div>')
+            
+            r.append('<h2>Memory</h2>')
             r.append(htmltable("*" + check_output(["free", "-h"]), 'class=tt', head=True, columns=6))
             
             r.append('<h2 class="rolldownheader">Storage</h2>')
             r.append(htmltable(check_output(
-                                "df -h --output=source,used,avail,size,pcent | "
+                                "df -h --output=source,target,used,avail,size,pcent | "
                                 "grep -v '\s0%$' | "
-                                "(read line; echo \"$line\"; sort -hrk4)"), 
-                        'class=tt', head=True, columns=4))
+                                "(read line; echo \"$line\" | sed 's#Mounted on#Mounted_on#'; sort -hrk5)"), 
+                        'class=tt', head=True, columns=5))
             
             r.append('<h2 class="rolldownheader">Disk I/O</h2>')
             r.append(htmltable(check_output("monitor_disk -s -F -i"), 
@@ -268,10 +299,10 @@ table.tt{
             content = self.assemble_main_page()
             return self.send_html_content(content)
         elif requested_path.lower() == "/zfs":
-            content = check_output("zpool status")
+            content = check_output("zpool status", True)
             return self.send_html_content("<PRE>" + content + "</PRE>")
         elif requested_path.lower() == "/network":
-            content = check_output("iftop -t -s 1 2>&1")
+            content = check_output("iftop -t -s 1", True)
             return self.send_html_content("<PRE>" + content + "</PRE>")
         elif requested_path == '/favicon.ico' and os.path.isfile(args.icon):
             return open(args.icon, 'rb')
