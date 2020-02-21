@@ -13,6 +13,21 @@ import sys
 import shutil
 
 import urllib.parse
+import math
+
+def convert_size(size_bytes, table, base):
+    if len(table) == 0 or base <= 0:
+        raise ValueError("ERROR in convert_size")
+    if size_bytes == 0:
+        return "0" + table[0]
+    i = min(int(math.log(size_bytes, base)), len(table)-1)
+    p = base**i
+    s = round(size_bytes/p, 2)
+    return "{:g}{:s}".format(s, table[i])
+def convert_size_2(bytes):
+    return convert_size(bytes, ("", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi", "Yi"), 1024)
+def convert_size_10(size):
+    return convert_size(size, ("", "k", "M", "G", "T", "P", "E", "Z", "Y"), 1000)
 
 def check_output(command, stderr=False):
     return subprocess.run(command, 
@@ -52,7 +67,7 @@ def get_pid_times():
             continue
         else:
             result[int(file.split('/')[2])] = (int(content[13]) + int(content[14]))/ticks
-    return result
+    return OrderedDict((key, result[key]) for key in sorted(result))
 
 def get_disk_activities():
     try:
@@ -64,10 +79,10 @@ def get_disk_activities():
     for line in content.strip().split('\n'):
         line = line.split()
         if len(line) >= 14:
-            result[line[2]] = (int(line[5]), int(line[9]))
             if line[2] in sector_sizes:
-                result[line[2]] *= sector_sizes[line[2]]
-    return result
+                sector_size = sector_sizes[line[2]]
+                result[line[2]] = (int(line[5])*sector_size, int(line[9])*sector_size)
+    return OrderedDict((key, result[key]) for key in sorted(result))
 
 class TimedDict:
     def __init__(self, f):
@@ -76,9 +91,8 @@ class TimedDict:
     def update(self, dt=60):
         currenttime = time.time()
         self.d[currenttime] = self.updater()
-        for key in list(self.d.keys()):
-            if key < currenttime - dt and key in self.d:
-                del self.d[key]
+        while len(self.d) > 0 and next(iter(self.d)) < currenttime - dt:
+            del self.d[next(iter(self.d))]
 
 pid_times = TimedDict(get_pid_times)
 disk_activities = TimedDict(get_disk_activities)
@@ -109,64 +123,114 @@ def compose_cpu_graph(*args, timewindow=60, t_mul=4, y_mul=100, pid_mul=1, **kwa
     
     height = cpu_cores*y_mul
     width = timewindow*t_mul
+    
+    timeticks = list(range(int(-timewindow), 0, int(timewindow/4)))
     r = []
     r.append('<svg height="{}" width="{}">'.format(height+30, width+80))
     r.append('<g transform="translate(30,10)">')
-    r.append(' <path stroke="black" stroke-width="2" fill=none d="M0 0 L0 {0} L{1} {0}" />'.format(height, timewindow*t_mul))
-    r.append(' <text font-size="20" fill="black" stroke="none" text-anchor="middle" x="{1}" y="{0}" dy="20">{2}</text>'.format(height, timewindow*t_mul, time.strftime("%H:%M:%S")))
+    r.append(' <path stroke="black" stroke-width="2" fill=none d="M0 0 L0 {0} L{1} {0}" />'.format(height, width))
+    r.append(' <text font-size="20" fill="black" stroke="none" text-anchor="middle" x="{1}" y="{0}" dy="20">{2}</text>'.format(height, width, time.strftime("%H:%M:%S")))
     r.append(' <g font-size="15" fill="black" stroke="none">')
     r.append('  <g text-anchor="end">')
     for i in range(1, cpu_cores+1):
         r.append('   <text x="0" y="{0}" dx="-5">{1}</text>'.format((cpu_cores-i)*y_mul, i))
     r.append('  </g><g text-anchor="middle">')
-    for i in range(int(-timewindow), 0, int(timewindow/4)):
+    for i in timeticks:
         r.append('   <text x="{0}" y="{1}" dy="16">{i}</text>'.format((timewindow+i)*t_mul, height, i=i))
     r.append(' <g>')
     r.append('<g stroke="black" stroke-width="1" fill=none>')
     for i in range(1, cpu_cores+1):
         r.append('   <path d="M-5 {0} L0 {0}" />'.format(height - i*y_mul))
-    for i in range(int(-timewindow), 0, int(timewindow/4)):
+    for i in timeticks:
         r.append('   <path d="M{0} {1} L{0} {2}" />'.format(t_mul*(timewindow+i), height+5, height))
     r.append(' </g>')
     if len(pid_times.d) > 1:
-        r.append('<g transform="scale(1, -1)"><g transform="translate(0,{})">'.format(-height))
-        pid_times_sorted = list(pid_times.d.items())
-        currenttime = timewindow - pid_times_sorted[-1][0]
-        previous_t, previous_pids = pid_times_sorted[0]
-        for t, pids in pid_times_sorted[1:]:
+        r.append(' <g transform="scale(1, -1)"><g transform="translate(0,{})">'.format(-height))
+        currenttime = timewindow - next(reversed(pid_times.d))
+        pid_iter = iter(pid_times.d.items())
+        previous_t, previous_pids = next(pid_iter)
+        for t, pids in pid_iter:
             y = 0
             x = currenttime + previous_t
             dt = t - previous_t
-            for pid in sorted(pids):
+            for pid in pids:
+                dy = pids[pid]
                 if pid in previous_pids:
-                    dy = pids[pid] - previous_pids[pid]
-                else:
-                    dy = pids[pid]
+                    dy -= previous_pids[pid]
                 dy /= dt
-                r.append('<rect x="{x}" y="{y}" width="{w}" height="{h}" style="fill:hsl({hue}, 100%, 75%);stroke:none;" />'.format(
+                r.append('  <rect x="{x}" y="{y}" width="{w}" height="{h}" style="fill:hsl({hue}, 100%, 75%);stroke:none;" />'.format(
                         x=t_mul*x, y=y_mul*y, h=y_mul*dy, w=t_mul*dt,
                         hue=pid_mul*pid*360/pid_max
                         ))
                 y += dy
             previous_t, previous_pids = t, pids
-        r.append('</g></g>')
+        r.append(' </g></g>')
     r.append('</g>')
     r.append('Sorry, your browser does not support inline SVG.')
     r.append('</svg>')
     return "\n".join(r)
 
-def get_proc_info(pid):
-    try:
-        with open('/proc/' + str(pid) + '/cmdline') as f:
-            cmdline = f.read().strip('\0').split('\0')
-        with open('/proc/' + str(pid) + '/stat') as f:
-            parent = int(f.read().strip().split()[3])
-        userid = os.stat("/proc/" + str(pid)).st_uid
-    except OSError:
-        return {}
-    else:
-        return {"cmdline": cmdline, "user": userid, "parent": parent}
-
+def compose_io_graph(disk, *args, timewindow=60, t_mul=4, height=200, y_max=125000000, **kwargs):
+    timewindow = query_to_type(timewindow, float, 60)
+    t_mul = query_to_type(t_mul, float, 4)
+    height = query_to_type(height, int, 200)
+    y_max = query_to_type(y_max, float, 125000000)
+    disk_activities.update(dt=timewindow)
+    
+    width = timewindow*t_mul
+    timeticks = list(range(int(-timewindow), 0, int(timewindow/4)))
+    y_ticks = list(range(int(y_max), 0, -int(y_max/4)))
+    
+    r = []
+    r.append('<svg height="{}" width="{}">'.format(height+30, width+110))
+    r.append('<g transform="translate(70,10)">')
+    r.append(' <path stroke="black" stroke-width="2" fill=none d="M0 0 L0 {0} L{1} {0}" />'.format(height, width))
+    r.append(' <text font-size="20" fill="black" stroke="none" text-anchor="middle" x="{1}" y="{0}" dy="20">{2}</text>'.format(height, width, time.strftime("%H:%M:%S")))
+    r.append(' <g font-size="15" fill="black" stroke="none">')
+    r.append('  <g text-anchor="end">')
+    for i in y_ticks:
+        r.append('   <text x="0" y="{0}" dx="-7">{1}</text>'.format(height-i*height/y_max, convert_size_2(i)))
+    r.append('  </g><g text-anchor="middle">')
+    for i in timeticks:
+        r.append('   <text x="{0}" y="{1}" dy="16">{i}</text>'.format((timewindow+i)*t_mul, height, i=i))
+    r.append(' <g>')
+    r.append('<g stroke="black" stroke-width="1" fill=none>')
+    for i in y_ticks:
+        r.append('   <path d="M-5 {0} L0 {0}" />'.format(i*height/y_max))
+    for i in timeticks:
+        r.append('   <path d="M{0} {1} L{0} {2}" />'.format(t_mul*(timewindow+i), height+5, height))
+    r.append(' </g>')
+    if len(disk_activities.d) > 1:
+        r.append(' <g transform="scale(1, -1)"><g transform="translate(0,{})">'.format(-height))
+        currenttime = timewindow - next(reversed(disk_activities.d))
+        disk_iter = iter(disk_activities.d.items())
+        previous_t, previous_disks = next(disk_iter)
+        x = currenttime + previous_t
+        read_plot = '  <path style="fill:blue;fill-opacity:0.5;stroke:none;" d="M{} 0'.format(t_mul*x)
+        write_plot= '  <path style="fill:red;fill-opacity:0.5;stroke:none;" d="M{} 0'.format(t_mul*x)
+        for t, disks in disk_iter:
+            dt = t - previous_t
+            if disk in disks:
+                y_read, y_write = disks[disk]
+                if disk in previous_disks:
+                    y_read  -= previous_disks[disk][0]
+                    y_write -= previous_disks[disk][1]
+                y_read, y_write = y_read/dt, y_write/dt
+            else:
+                y_read, y_write = 0, 0
+            read_plot += ' L{x1} {y} L{x2} {y}'.format(x1=t_mul*x, x2=t_mul*(x+dt), y=y_read*height/y_max)
+            write_plot += ' L{x1} {y} L{x2} {y}'.format(x1=t_mul*x, x2=t_mul*(x+dt), y=y_write*height/y_max)
+            previous_t, previous_disks = t, disks
+            x += dt
+        read_plot  += 'L{} 0 Z" />'.format(width)
+        write_plot += 'L{} 0 Z" />'.format(width)
+        r.append(read_plot)
+        r.append(write_plot)
+        r.append('</g></g>')
+    r.append('</g>')
+    r.append('Sorry, your browser does not support inline SVG.')
+    r.append('</svg>')
+    return "\n".join(r)
 def htmltable(text, *extra, head=False, columns=3):
     r = ["<table " + " ".join(extra) + ">"]
     def formatline(line, head=False, extra=""):
@@ -187,7 +251,7 @@ def htmltable(text, *extra, head=False, columns=3):
 
     r.append("</table>")
     return "\n".join(r)
-                
+
 class MemoryHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
     server_version = "MemoryHTTP/" + http.server.__version__
     enc = "utf-8"
@@ -244,11 +308,26 @@ table.tt{
             r.append('<body>')
             r.append('<h1>{}</h1>'.format(gethostname()))
             
-            r.append('<h2 class="rolldownheader">CPU</h2>')
-            r.append('<p>')
-            r.append(cpu_info)
-            r.append('</p>')
-            r.append(compose_cpu_graph(**self.query))
+            if "vertical" in self.query:
+                r.append('<h2 class="rolldownheader">CPU</h2>')
+                r.append('<p>')
+                r.append(cpu_info)
+                r.append('</p>')
+                r.append(compose_cpu_graph(**self.query))
+                
+                r.append('<h2>Memory</h2>')
+                r.append(htmltable("*" + check_output(["free", "-h"]), 'class=tt', head=True, columns=6))                    
+            else:
+                r.append('<table><tr>')
+                r.append('<th>')
+                r.append(cpu_info)
+                r.append('</th>')
+                r.append('<th>Memory</th>\n</tr>\n<tr>\n<td>')
+                r.append(compose_cpu_graph(**self.query))
+                r.append('</td>\n<td>')
+                r.append(htmltable("*" + check_output(["free", "-h"]), 'class=tt', head=True, columns=6))
+                r.append('</td>\n</tr></table>')
+            
             pid_percents = check_output(["ps", "-a", "-f", "-o", "%cpu,%mem,uid,command", "--sort", "-%cpu"])
             pid_percents = "\n".join(pid for pid in pid_percents.strip("\n").split("\n") if pid.split()[2] != "0")
             
@@ -256,11 +335,28 @@ table.tt{
             r.append('<h3 class="rolldownheader">ps</h3>')
             r.append('<div class=rolldowncontent>')
             r.append(htmltable(pid_percents, 'class=tt', head=True, columns=3))
-            r.append('</div></div>')
+            r.append('</div></div>')         
             
-            r.append('<h2>Memory</h2>')
-            r.append(htmltable("*" + check_output(["free", "-h"]), 'class=tt', head=True, columns=6))
-            
+            r.append('<h2>Disk I/O</h2>')
+            update_sector_sizes()
+            devices = [device for device in sector_sizes if device[:4] != "loop"]
+            if "vertical" in self.query:
+                for device in devices:
+                    r.append('<h3>{}</h3>'.format(device))
+                    r.append(compose_io_graph(device, **self.query))
+            else:        
+                r.append('<table><tr>')
+                for device in devices:
+                    if device[:4] != "loop":
+                        r.append('<th>{}</th>'.format(device))
+                r.append('</tr><tr>')
+                for device in devices:
+                    if device[:4] != "loop":
+                        r.append('<td>')
+                        r.append(compose_io_graph(device, **self.query))
+                        r.append('</td>')
+                r.append('</tr></table>')
+
             r.append('<h2 class="rolldownheader">Storage</h2>')
             r.append(htmltable(check_output(
                                 "df -h --output=source,target,used,avail,size,pcent | "
@@ -268,9 +364,6 @@ table.tt{
                                 "(read line; echo \"$line\" | sed 's#Mounted on#Mounted_on#'; sort -hrk5)"), 
                         'class=tt', head=True, columns=5))
             
-            r.append('<h2 class="rolldownheader">Disk I/O</h2>')
-            r.append(htmltable(check_output("monitor_disk -s -F -i"), 
-                        'class=tt', head=True, columns=4))
             r.append('</body></html>')
             return '\n'.join(r)
 
