@@ -55,31 +55,45 @@ def update_pid_times(dt=60):
         if key < currenttime - dt and key in pid_times:
             del pid_times[key]
 
-def compose_cpu_graph():
-    height = cpu_cores*100
+def compose_cpu_graph(*args, timewindow=60, t_mul=4, y_mul=100, **kwargs):
+    try:
+        timewindow = int(timewindow[0])
+    except:
+        timewindow = 60
+    try:
+        t_mul = int(t_mul[0])
+    except:
+        t_mul = 4
+    try:
+        y_mul = int(y_mul[0])
+    except:
+        y_mul = 100
+    update_pid_times(dt=timewindow)
+    
+    height = cpu_cores*y_mul
     r = []
-    r.append('<svg width="300" height="{}">'.format(height+30))
+    r.append('<svg height="{}" width="{}">'.format(height+30, timewindow*t_mul+50))
     r.append('<g transform="translate(15,10)">')
-    r.append(' <path stroke="black" stroke-width="2" fill=none d="M0 0 L0 {0} L240 {0}" />'.format(height))
-    r.append(' <text font-size="20" fill="black" stroke="none" text-anchor="middle" x="240" y="{0}" dy="20">{1}</text>'.format(height, time.strftime("%H:%M:%S")))
+    r.append(' <path stroke="black" stroke-width="2" fill=none d="M0 0 L0 {0} L{1} {0}" />'.format(height, timewindow*t_mul))
+    r.append(' <text font-size="20" fill="black" stroke="none" text-anchor="middle" x="{1}" y="{0}" dy="20">{2}</text>'.format(height, timewindow*t_mul, time.strftime("%H:%M:%S")))
     r.append(' <g font-size="15" fill="black" stroke="none">')
     r.append('  <g text-anchor="end">')
     for i in range(1, cpu_cores+1):
-        r.append('   <text x="0" y="{0}" dx="-5">{1}</text>'.format((cpu_cores-i)*100, i))
+        r.append('   <text x="0" y="{0}" dx="-5">{1}</text>'.format((cpu_cores-i)*y_mul, i))
     r.append('  </g><g text-anchor="middle">')
-    for i in range(-60, 0, 15):
-        r.append('   <text x="{0}" y="{1}" dy="16">{i}</text>'.format(240+i*4, height, i=i))
+    for i in range(-timewindow, 0, timewindow//4):
+        r.append('   <text x="{0}" y="{1}" dy="16">{i}</text>'.format((timewindow+i)*t_mul, height, i=i))
     r.append(' <g>')
     r.append('<g stroke="black" stroke-width="1" fill=none>')
     for i in range(1, cpu_cores+1):
-        r.append('   <path d="M-5 {0} L0 {0}" />'.format(height - i*100))
-    for i in range(0, -60, -15):
-        r.append('   <path d="M{0} {1} L{0} {2}" />'.format(240+4*i, height+5, height))
+        r.append('   <path d="M-5 {0} L0 {0}" />'.format(height - i*y_mul))
+    for i in range(-timewindow, 0, timewindow//4):
+        r.append('   <path d="M{0} {1} L{0} {2}" />'.format(t_mul*(timewindow+i), height+5, height))
     r.append(' </g>')
     if len(pid_times) > 1:
         r.append('<g transform="scale(1, -1)"><g transform="translate(0,{})">'.format(-height))
         pid_times_sorted = list((key, pid_times[key]) for key in sorted(pid_times))
-        currenttime = 60 - pid_times_sorted[-1][0]
+        currenttime = timewindow - pid_times_sorted[-1][0]
         previous_t, previous_pids = pid_times_sorted[0]
         for t, pids in pid_times_sorted[1:]:
             y = 0
@@ -92,7 +106,7 @@ def compose_cpu_graph():
                     dy = pids[pid]
                 dy /= dt
                 r.append('<rect x="{x}" y="{y}" width="{w}" height="{h}" style="fill:hsl({hue}, 100%, 75%);stroke:none;" />'.format(
-                        x=4*x, y=100*y, h=100*dy, w=4*dt,
+                        x=t_mul*x, y=y_mul*y, h=y_mul*dy, w=t_mul*dt,
                         hue=pid_to_hue*pid
                         ))
                 y += dy
@@ -172,7 +186,7 @@ class MemoryHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             return f
 
-    def assemble_html_content(self):
+    def assemble_main_page(self):
             r = []
             r.append('<!DOCTYPE HTML>')
             r.append('<html><head>')
@@ -207,7 +221,7 @@ table.tt{
             r.append('<p>')
             r.append(cpu_info)
             r.append('</p>')
-            r.append(compose_cpu_graph())
+            r.append(compose_cpu_graph(**self.query))
             pid_percents = check_output(["ps", "-a", "-f", "-o", "%cpu,%mem,uid,command", "--sort", "-%cpu"])
             # " | grep -vP '^ *\d+\.\d+ +\d+\.\d+ +0 '"
             pid_percents = "\n".join(pid for pid in pid_percents.strip("\n").split("\n") if pid.split()[2] != "0")
@@ -246,10 +260,12 @@ table.tt{
             f.close()
 
     def send_head(self):
-        update_pid_times()
-        requested_path = urllib.parse.unquote(self.path)
+        parsed_request = urllib.parse.urlparse(urllib.parse.unquote(self.path))
+        self.query = urllib.parse.parse_qs(parsed_request.query)
+        requested_path = parsed_request.path
+        
         if requested_path == '/':
-            content = self.assemble_html_content()
+            content = self.assemble_main_page()
             return self.send_html_content(content)
         elif requested_path.lower() == "/zfs":
             content = check_output("zpool status")
