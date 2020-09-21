@@ -15,6 +15,11 @@ import shutil
 import urllib.parse
 import math
 
+def isbusy(disk):
+    return check_output(
+        "sudo -n hdparm -C " + disk + " | grep 'drive state is: ' | tr ' ' '\\n' | tail -n1"
+        ).strip() != "standby"
+
 def convert_size(size_bytes, table, base):
     if len(table) == 0 or base <= 0:
         raise ValueError("ERROR in convert_size")
@@ -335,7 +340,7 @@ table.tt{
             r.append('<h3 class="rolldownheader">ps</h3>')
             r.append('<div class=rolldowncontent>')
             r.append(htmltable(pid_percents, 'class=tt', head=True, columns=3))
-            r.append('</div></div>')         
+            r.append('</div></div>')
             
             r.append('<h2>Disk I/O</h2>')
             update_sector_sizes()
@@ -344,12 +349,12 @@ table.tt{
             devices.sort()
             if "vertical" in self.query:
                 for device in devices:
-                    r.append('<h3>{}</h3>'.format(device))
+                    r.append('<h3 style="color:{1}">{0}</h3>'.format(device, "black" if isbusy("/dev/" + device) else "grey"))
                     r.append(compose_io_graph(device, **self.query))
             else:
                 r.append('<table><tr>')
                 for device in devices:
-                    r.append('<th>{}</th>'.format(device))
+                    r.append('<th style="color:{1}">{0}</th>'.format(device, "black" if isbusy("/dev/" + device) else "grey"))
                 r.append('</tr><tr>')
                 for device in devices:
                     r.append('<td>')
@@ -363,6 +368,12 @@ table.tt{
                                 "grep -v '\s0%$' | "
                                 "(read line; echo \"$line\" | sed 's#Mounted on#Mounted_on#'; sort -hrk5)"), 
                         'class=tt', head=True, columns=5))
+
+            r.append('<div class="rolldown">')
+            r.append('<h3 class="rolldownheader">zpool</h3>')
+            r.append('<div class=rolldowncontent>')
+            r.append("<pre>" + check_output("sudo -n zpool status") + "</pre>")
+            r.append('</div></div>')
             
             r.append('</body></html>')
             return '\n'.join(r)
