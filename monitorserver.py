@@ -278,7 +278,8 @@ class MemoryHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             r = []
             r.append('<!DOCTYPE HTML>')
             r.append('<html><head>')
-    
+            if "refresh" in self.query:
+                r.append("<meta http-equiv=refresh content={}>".format(self.query["refresh"][0]))
             r.append('<meta charset="{}">'.format(self.enc))
             r.append('<title>{}</title>'.format(gethostname()))
             r.append('<style>')
