@@ -343,11 +343,13 @@ def html_table_line(line, head=False, extra_attributes="", columns=3):
         sep1 = '<td>'
         sep2 = '</td>'
     html_line = map(htmlescape, line.strip().split(None, columns))
-    return f"<tr {extra_attributes}>{sep1}{(sep2 + sep1).join(html_line)}{sep2}</tr>"
+    return "<tr {extra_attributes}>{sep1}{line}{sep2}</tr>".format(
+        extra_attributes=extra_attributes, sep1=sep1, sep2=sep2, line=(sep2 + sep1).join(html_line)
+    )
 
 
 def htmltable(text, *extra_attributes, head=False, columns=3):
-    r = [f"<table {' '.join(extra_attributes)}>"]
+    r = ["<table {}>".format(' '.join(extra_attributes))]
     text = text.strip('\n').split('\n')
     if head and len(text) > 0:
         r.append(html_table_line(text[0], head=True, columns=columns))
