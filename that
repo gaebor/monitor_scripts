@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+FOUNDFILE=`which "$2"`
+args=("$@")
+lenargs=${#args[@]}
+if [ "$FOUNDFILE" ]
+then
+    "$1" "$FOUNDFILE" "${args[@]:2:$lenargs}"
+    exit $?
+else
+    echo file "\"$2\"" not found 2>&1
+    exit 1
+fi
+

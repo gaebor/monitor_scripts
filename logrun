@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+if [ "$1" = '-c' ]
+then
+    SHELL_COMMAND="$SHELL -c"
+    COMMAND="$SHELL"
+    shift
+else
+    COMMAND="$1"
+fi
+
+filename=`basename "$COMMAND"`.`datefile`.log
+echo [from] `hostname`:`pwd` > "$filename"
+echo [running] "$@" >> "$filename"
+echo [output] >> "$filename"
+if [ -z "$SHELL_COMMAND" ]
+then
+    "$@"
+else
+    $SHELL_COMMAND "$*" 
+fi > >(tee -a "$filename") 2> >(tee -a "$filename" 1>&2)
