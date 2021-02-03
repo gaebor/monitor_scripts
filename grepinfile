@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+extension=
+
+if [ "$1" = '--ext' -a "$1" != '--' ]
+then
+    extension="$2"
+    shift
+    shift
+fi
+
+if [ -z "$extension" ]
+then
+    extension_str=""
+else
+    extension_str="-path '*.$extension'"
+fi
+found_files=`bash -c "find . -type f $extension_str"`
+if [ -z $found_files ]
+then
+    echo NO \`find . -type f $extension_str\` FOUND 2>&1 
+else
+    grep "$@" `bash -c "find . -type f $extension_str"`
+fi
