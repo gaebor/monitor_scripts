@@ -38,7 +38,7 @@ do
     for i in `seq 0 $((n_cpus-1))`
     do
         usage=$(($WIDTH * (${NEW_STAT[$i]}-${CPU_STAT[$i]}) / ($NEW_TIME-$TIME) / $ticks))
-        print_bar $WIDTH $usage ${FREQS[$i]}
+        print_bar $WIDTH $usage `if [ "$1" ]; then cut -f1 -d'.' <<<"${FREQS[$i]}"; fi`
     done
     echo
     CPU_STAT=(${NEW_STAT[*]})
