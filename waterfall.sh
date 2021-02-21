@@ -4,7 +4,7 @@ n_cpus=`getconf _NPROCESSORS_ONLN`
 ticks=`getconf CLK_TCK`
 
 function float_eval() {
-    awk "BEGIN {print $@}"
+    LC_NUMERIC='' awk "BEGIN {print $@}"
 }
 
 function print_bar() {
