@@ -20,18 +20,21 @@ function print_bar() {
 
 function provide_disk_data() {
     if [ -z "$1" ]
-    then CONDITION='^s'
+    then CONDITION=' [a-z]+ '
     else CONDITION="$1"
     fi
-    DISKSTAT=`cat /proc/diskstats`
-    grep -P '\d+' /sys/block/*/queue/hw_sector_size | \
-    tr ':' '/' | cut -f4,7 -d'/' | grep "$CONDITION" | \
+    SECTOR_SIZES=`grep '' /sys/block/*/queue/hw_sector_size | tr ':' '/' | cut -f4,7 -d'/'`
+    grep -P "$CONDITION" /proc/diskstats | \
     while read line
     do
-        DISK=`cut -f1 -d'/' <<<"$line"`
-        SECTOR=`cut -f2 -d'/' <<<"$line"`
-        STATS=(`grep " $DISK " <<<"$DISKSTAT"`)
-        echo -n "$DISK(r)" `float_eval ${STATS[5]}*$SECTOR/125000000` "$DISK(w)" `float_eval ${STATS[9]}*$SECTOR/125000000` ' ' # "${STATS[9]}"
+        STATS=($line)
+        NAME="${STATS[2]}"
+        SECTOR_SIZE=`grep "${NAME::3}" <<<"$SECTOR_SIZES" | cut -f2 -d'/'`
+        if [ -z "$SECTOR_SIZE" ]
+        then 
+            SECTOR_SIZE=512
+        fi
+        echo -n "$NAME(r)" `float_eval ${STATS[5]}*$SECTOR_SIZE/125000000` "$NAME(w)" `float_eval ${STATS[9]}*$SECTOR_SIZE/125000000` ' ' # "${STATS[9]}"
     done
 }
 
@@ -80,7 +83,7 @@ do
     fi
 done
 
-CPU_STAT=($(for i in `seq 0 2 $((${#PROVIDERS[*]}-1))`; do provide_${PROVIDERS[$i]}_data ${PROVIDERS[$(($i+1))]}; done))
+CPU_STAT=($(for i in `seq 0 2 $((${#PROVIDERS[*]}-1))`; do provide_${PROVIDERS[$i]}_data "${PROVIDERS[$(($i+1))]}"; done))
 TIME=`date +%s`
 
 time_interval=2
@@ -89,7 +92,7 @@ while true
 do
     sleep $time_interval
 
-    NEW_STAT=($(for i in `seq 0 2 $((${#PROVIDERS[*]}-1))`; do provide_${PROVIDERS[$i]}_data ${PROVIDERS[$(($i+1))]}; done))
+    NEW_STAT=($(for i in `seq 0 2 $((${#PROVIDERS[*]}-1))`; do provide_${PROVIDERS[$i]}_data "${PROVIDERS[$(($i+1))]}"; done))
     NEW_TIME=`date +%s`
     
     COLUMNS=`tput cols`
