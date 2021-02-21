@@ -72,6 +72,7 @@ function provide_memory_data() {
     echo -n "${MEM_H[2]}/${MEM_H[1]}" `float_eval "${MEM[2]}/${MEM[1]}"` ' '
 }
 
+SHOW_MEM=''
 PROVIDERS=()
 for arg in "$@"
 do
@@ -79,7 +80,12 @@ do
     then
         PROVIDERS[$((${#PROVIDERS[*]}-1))]="${arg:1}"
     else
-        PROVIDERS+=("$arg" '')
+        if [ "$arg" = 'memory' ]
+        then
+            SHOW_MEM=true
+        else
+            PROVIDERS+=("$arg" '')
+        fi
     fi
 done
 
@@ -95,14 +101,23 @@ do
     NEW_STAT=($(for i in `seq 0 2 $((${#PROVIDERS[*]}-1))`; do provide_${PROVIDERS[$i]}_data "${PROVIDERS[$(($i+1))]}"; done))
     NEW_TIME=`date +%s`
     
+    N_STATS=$((${#NEW_STAT[*]}/2))
+    if [ "$SHOW_MEM" ]; then N_STATS=$(($N_STATS+1)); fi
+
     COLUMNS=`tput cols`
-    WIDTH=$(($COLUMNS/${#NEW_STAT[*]}*2))
+    WIDTH=$(($COLUMNS/$N_STATS))
 
     for i in `seq 1 2 $((${#NEW_STAT[*]}-1))`
     do
-        usage=`float_eval "$WIDTH*(${NEW_STAT[$i]}-${CPU_STAT[$i]})/($NEW_TIME-$TIME)" | cut -f1 -d'.'`
+        usage=`float_eval "$WIDTH*(${NEW_STAT[$i]}-${CPU_STAT[$i]})/($NEW_TIME-$TIME)"`
         print_bar $WIDTH $usage "${NEW_STAT[$(($i-1))]}"
     done
+
+    if [ "$SHOW_MEM" ]
+    then
+        MEMORY_INFO=(`provide_memory_data`)
+        print_bar $WIDTH `float_eval "$WIDTH*${MEMORY_INFO[1]}"` "${MEMORY_INFO[0]}"
+    fi
     echo
     
     CPU_STAT=(${NEW_STAT[*]})
