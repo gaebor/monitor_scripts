@@ -4,12 +4,12 @@ n_cpus=`getconf _NPROCESSORS_ONLN`
 ticks=`getconf CLK_TCK`
 
 function float_eval() {
-    LC_NUMERIC='' awk "BEGIN {print $@}"
+    LC_ALL='C' awk "BEGIN {print $@}"
 }
 
 function print_bar() {
-    width="$1"
-    length="$2"
+    width=`LC_ALL='C' printf '%.0f' "$1"`
+    length=`LC_ALL='C' printf '%.0f' "$2"`
     text=`echo -n "$3"; bash -c "printf ' %.0s' {1..$width}"`
     text="${text::$width}"
     echo -n -e "\e[7m"
