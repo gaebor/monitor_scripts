@@ -1,0 +1,10 @@
+#!/bin/bash
+mkdir -p `hostname`
+cd `hostname`
+
+if [ "$1" = "-g" ]
+then
+        cmake -DCMAKE_BUILD_TYPE=Debug .. && make
+else
+        cmake -DCMAKE_BUILD_TYPE=Release .. && make
+fi
