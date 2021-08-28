@@ -55,14 +55,7 @@ def check_output(command, stderr=False):
     ).stdout
 
 
-ticks = int(
-    check_output(
-        """FILENAME=`tempfile`; echo '#include <unistd.h>
-#include <stdio.h>
-int main(){printf("%lu", sysconf(_SC_CLK_TCK)); return 0;}
-' > $FILENAME.c && gcc -o $FILENAME $FILENAME.c && $FILENAME && rm $FILENAME $FILENAME.c"""
-    )
-)
+ticks = int(check_output(['getconf', 'CLK_TCK']))
 
 pid_max = int(open('/proc/sys/kernel/pid_max').read().strip())
 cpu_info = check_output(
